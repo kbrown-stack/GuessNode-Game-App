@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Room</title>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+    <h1>Game Room</h1>
+    <h3>Session ID: <%= sessionId %></h3>
+    <h3>Players:</h3>
+    <ul id="playersList"></ul>
+
+
+    <script>
+        const socket = io();
+        const sessionId = "<%= sessionId %>";
+
+        socket.emit("joinGame", { sessionId, username: "Player" + Math.floor(Math.random() * 100) });
+
+        socket.on("updatePlayers", (players) => {
+            const playersList = document.getElementById("playersList");
+            playersList.innerHTML = "";
+            players.forEach(player => {
+                playersList.innerHTML += `<li>${player.username} (Score: ${player.score})</li>`;
+            });
+        });
+    </script>
+    
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuessNode Application</title>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <h1>Welcome to GuessNode Game</h1>
+
+    <input type="text" id="username" placeholder="Enter your name">
+    <button onclick="createGame()">Create Game</button>
+    <br><br>
+    <input type="text" id="sessionId" placeholder="Enter Game ID">
+    <button onclick="joinGame()">Join Game</button>
+
+
+    <script>
+        const socket = io();
+
+        function createGame() {
+            const username = document.getElementById("username").value;
+            if (!username) return alert("Enter your name!");
+            socket.emit("createGame", { username });
+        }
+
+        socket.on("gameCreated", ({ sessionId }) => {
+            window.location.href = `/game/${sessionId}`;
+        });
+
+        function joinGame() {
+            const username = document.getElementById("username").value;
+            const sessionId = document.getElementById("sessionId").value;
+            if (!username || !sessionId) return alert("Enter name and game ID!");
+            socket.emit("joinGame", { sessionId, username });
+        }
+    </script>
+
+</body>
+</html>
