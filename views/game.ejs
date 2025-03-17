@@ -13,20 +13,57 @@
     <h3>Players:</h3>
     <ul id="playersList"></ul>
 
-
     <script>
         const socket = io();
         const sessionId = "<%= sessionId %>";
+    
+        window.onload = () => {
 
-        socket.emit("joinGame", { sessionId, username: "Player" + Math.floor(Math.random() * 100) });
+            // This is to comfirm if player or user is already existing
 
-        socket.on("updatePlayers", (players) => {
-            const playersList = document.getElementById("playersList");
-            playersList.innerHTML = "";
-            players.forEach(player => {
-                playersList.innerHTML += `<li>${player.username} (Score: ${player.score})</li>`;
+            let username = sessionStorage.getItem("username");
+    
+            // If no username is seen here, prompt the user to input it.
+            if (!username) {
+                username = prompt("Enter your username:");
+                if (!username) {
+                    alert("Please enter your username");
+                    window.location.href = "/"; // This redirects it back to the home page which is the index page if no username.
+                    return;
+                }
+                sessionStorage.setItem("username", username); // This saves username
+            }
+    
+            // This emits joingame session with username and session ID
+            
+            // setTimeout(() => {
+            //     socket.emit("joinGame", { sessionId, username }); // This signifies time to join , to enable server process the session request
+            // }, 1000);
+
+            setTimeout(() => {
+    if (gameSessions[sessionId]) {  
+        res.render("game", { sessionId });  
+    } else {
+        res.render("error", { message: "Game session not available. Please check the ID." });
+    }
+}, 1000);  // Wait 1 second before checking
+
+
+            //To Hanlde the users/players update list.
+    
+            socket.on("updatePlayers", (players) => {
+                const playersList = document.getElementById("playersList");
+                playersList.innerHTML = ""; // This clears the users/players list.
+                players.forEach(player => {
+                    playersList.innerHTML += `<li>${player.username} (Score: ${player.score})</li>`;
+                });
             });
-        });
+    
+            socket.on("error", (data) => {
+                alert(data.message);
+                window.location.href = "/"; // This redirects it back to the home page which is the index page if any error happens.
+            });
+        };
     </script>
     
 </body>

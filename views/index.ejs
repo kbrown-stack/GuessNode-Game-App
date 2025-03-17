@@ -9,33 +9,79 @@
 <body>
     <h1>Welcome to GuessNode Game</h1>
 
-    <input type="text" id="username" placeholder="Enter your name">
     <button onclick="createGame()">Create Game</button>
-    <br><br>
-    <input type="text" id="sessionId" placeholder="Enter Game ID">
     <button onclick="joinGame()">Join Game</button>
-
-
+   
     <script>
         const socket = io();
 
-        function createGame() {
-            const username = document.getElementById("username").value;
-            if (!username) return alert("Enter your name!");
+        // This enable us to listen for session creation event  // Observing the gameCreated event before navigating
+
+                    socket.on("gameCreated", ({ sessionId }) => {
+                console.log("Game Created! Redirecting to game:", sessionId)
+                window.location.href = `/game/${sessionId}`;
+            });
+
+// Create Game Function
+
+      function createGame() {
+            const username = prompt("Enter your username:");
+            if (!username) {
+                alert("Please enter your username");
+                return;
+            }
+            socket.emit("setUsername", { username }); // This stores the username in the server.
+    
             socket.emit("createGame", { username });
+
+            socket.on("gameCreated", ({sessionId}) => {
+
+                window.location.href = `/game/${sessionId}`;
+            });
+
         }
 
-        socket.on("gameCreated", ({ sessionId }) => {
-            window.location.href = `/game/${sessionId}`;
-        });
 
+// Join Game Fuction
         function joinGame() {
-            const username = document.getElementById("username").value;
-            const sessionId = document.getElementById("sessionId").value;
-            if (!username || !sessionId) return alert("Enter name and game ID!");
-            socket.emit("joinGame", { sessionId, username });
+            const sessionId = prompt("Enter the Game ID to join:");
+            if (!sessionId || !sessionId.trim()) {
+                alert("Please enter a valid Game ID");
+                return;
+            }
+
+            const username = prompt("Enter your username:");
+            if(!username) {
+                alert("Please enter a valid username");
+                return;
+            }
+
+            sessionStorage.setItem("username", username);
+
+            // console.log(`Attempting to join game: ${sessionId}`);
+            socket.emit("setUsername", username); // this stores username on the server.
+            socket.emit("checkGame", {sessionId});
+
+            // Check the server before redirecting 
+            const formattedSessionId = sessionId.startsWith("game") ? sessionId : `game-${sessionId}`;
+            socket.emit("checkGame", {sessionId: formattedSessionId });
+
+            // The use of "once" is to enable it to listen to the next response.
+            socket.once("gameExists", (exists) => {
+                // console.log(`Server response for session  ${sessionId}: ${exists}`);
+
+                if (exists) {
+                    window.location.href = `/game/${sessionId}`; // This is to join the game if it exits. 
+                } else {
+                    alert(" Game session is not valid. Please kindly check your ID");
+                }
+            })
+            
         }
+
     </script>
+
+     <!-- <button onclick="joinGame()">Join Game</button> -->
 
 </body>
 </html>
