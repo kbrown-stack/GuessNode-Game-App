@@ -8,12 +8,17 @@ const PORT = 8001;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server); // this server is part of the socket io.
+const Game = require("./models/game");
+
+const connectToDb = require('./db/mongodb'); // importing the mongo DB
 
 // Setting up the EJS ENGINE FOR THE view folder and files.
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public"))); // this is a MD that helps create the style static file
+
+connectToDb() // Connecting to MongoDB  Database.
 
 // To store game Sessions
 
@@ -44,40 +49,52 @@ app.get("/game/:sessionId", (req, res) => {
 // Implementing and creating the websocket connectivity
 
 io.on("connection", (socket) => {
-//   console.log("A user connected:", socket.id);
+  console.log("A user connected:", socket.id);
 
   // This listen for username when user created or joins the game session.
 
-  socket.on("setUsername", (username) => {
-    console.log(` user "${username}" connected with ID: ${socket.id}`);
+  socket.on("createGame", async ({username}) => {
+    const sessionId = `game-${Date.now()}`;
+
+    const newGame = new Game({
+        sessionId,
+        gameMaster: socket.id,
+        players: [{id:socket.id, username, score: 0, attempts: 5}],
+        status: "waiting"
+    });
+
+    await newGame.save(); // This saved the game in the MongDB
+    console.log("Game created:", sessionId);
+
+    socket.emit("gameCreated", {sessionId});
   })
 
   // Implementing and creating a game session
 
-  socket.on("createGame", ({ username }) => {
-    const sessionId = `game-${Date.now()}`;
+//   socket.on("createGame", ({ username }) => {
+//     const sessionId = `game-${Date.now()}`;
 
-    gameSessions[sessionId] = {
-      // This helps to store the game sessions with unique IDs.
-      gameMaster: socket.id,
-      players: [{ id: socket.id, username, score: 0, attempts: 5 }],
-      question: null,
-      answer: null,
-      status: "waiting",
-    };
-    console.log(
-      `Game created successfully: ${sessionId}`,
-      JSON.stringify(gameSessions, null, 2)
-    ); // This helps debug the logs.
-    console.log("Current game sessions:", gameSessions);
+//     gameSessions[sessionId] = {
+//       // This helps to store the game sessions with unique IDs.
+//       gameMaster: socket.id,
+//       players: [{ id: socket.id, username, score: 0, attempts: 5 }],
+//       question: null,
+//       answer: null,
+//       status: "waiting",
+//     };
+//     console.log(
+//       `Game created successfully: ${sessionId}`,
+//       JSON.stringify(gameSessions, null, 2)
+//     ); // This helps debug the logs.
+//     console.log("Current game sessions:", gameSessions);
 
-    socket.join(sessionId);
+//     socket.join(sessionId);
 
-    setTimeout(() => {
-      socket.emit("gameCreated", { sessionId }); // This delays the process to make sure session is created.
-    }, 500);
-    // console.log(`${username} created game: ${sessionId}`);
-  });
+//     setTimeout(() => {
+//       socket.emit("gameCreated", { sessionId }); // This delays the process to make sure session is created.
+//     }, 500);
+//     // console.log(`${username} created game: ${sessionId}`);
+//   });
 
   // To store game session before redirecting it.
   socket.on("gameCreated", ({}) => {
@@ -166,19 +183,15 @@ io.on("connection", (socket) => {
 
   // Implementing the check Game
 
-  socket.on("checkGame", ({ sessionId }) => {
-    // console.log(`checking game session: ${sessionId}`);
-    // console.log("Current game session:", JSON.stringify(gameSessions, null, 2));
+  socket.on("checkGame",  async ({ sessionId }) => {
+const game = await Game.findOne({sessionId});
 
+    if (!game) {
+     socket.emit("gameExists", false);
+     return
+     } 
+      socket.emit("gameExists", true);
 
-    const fullSessionId = sessionId.startsWith("game-") ? sessionId  : `game-${sessionId}`; // This ensures the session ID formatted correctly.
-
-    if (gameSessions[fullSessionId]) {
-     socket.emit("gameExists", true);
-    } else {
-      // console.log(`Game session ${sessionId} found.`);
-      socket.emit("gameExists", false);
-    }
   });
 
   //implementing when a user or player submit a game guess
