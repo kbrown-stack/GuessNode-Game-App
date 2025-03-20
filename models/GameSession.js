@@ -14,6 +14,7 @@ const playerSchema = new mongoose.Schema({
 // Schema models for a game session.
 
 const gameSessionSchema = new mongoose.Schema({
+    sessionId: {type: String, required: true, unique: true}, // This ensures the session ID is existing in the database document.
     gameMaster: { type: String, required: true },
     players: [playerSchema],
     question: { type: String, default: null }, // Question for the round

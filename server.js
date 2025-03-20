@@ -21,7 +21,7 @@ app.use(express.static(path.join(__dirname, "public"))); // this is a MD that he
 
 connectToDb() // Connecting to MongoDB  Database.
 
-app.use('/api/game', gameRoutes) // Using the game route for all API related game endpoints
+app.use('/game', gameRoutes) // Using the game route for all API related game endpoints
 
 
 // Setting up the Routes

@@ -1,17 +1,22 @@
 
+const mongoose = require("mongoose");
 const Game = require("../models/GameSession");
 
 // This handles the route for the game page
 
 exports.gamePage = async (req,res) => {
-    const sessionId = req.params.sessionId;
+    // const sessionId = req.params.sessionId;
 
     try {
-        const game = await Game.findOne({sessionId});
+        const {sessionId} = req.params;
+        console.log("Requested sessionId:", sessionId); //logg
+
+        const game = await Game.findOne({_id: new mongoose.Types.ObjectId(sessionId) }); 
 
         if (game) {
             res.render("game", {sessionId});
         } else {
+            console.log("Game session not found!"); // loggg
             res.status(404).send("Game session not found");
         }
 
@@ -19,6 +24,7 @@ exports.gamePage = async (req,res) => {
         console.error("Error fetching game session:", error);
         res.status(500).send("internal server error");
     }
+
     };
     // This handles the Websocket events
 
