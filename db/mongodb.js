@@ -1,16 +1,21 @@
-const mongoose = require('mongoose');
-const config = require('../config/config'); // This is to import the config file.
 
-function connectToDb() {
-    mongoose.connect(config.MONGODB_URL);
+require("dotenv").config();  // Load .env
+const mongoose = require("mongoose");
 
-    mongoose.connection.on('connected', () => {
-        console.log('Mongodb connected Successfully');
-    });
+const connectToDb = async () => {
+    try {
 
-    mongoose.connection.on('error', (err) => {   // This is an else statement  if it fails to connect
-        console.log(err);
-    });
-}
+        if (!process.env.MONGODB_URL) {
+            throw new Error("MONGODB_URL is not defined in .env file");
+        }
+        mongoose.connect(process.env.MONGODB_URL);
+
+
+        console.log("Connected to MongoDB");
+    } catch (error) {
+        console.error("MongoDB connection failed:", error.message);
+    }
+};
 
 module.exports = connectToDb;
+
