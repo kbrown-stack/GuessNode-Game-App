@@ -1,8 +1,6 @@
 const mongoose = require("mongoose");
 const Game = require("../models/GameSession");
-const Question = require("../models/question")
-
-
+const Question = require("../models/question");
 
 // This handles the route for the game page
 
@@ -12,7 +10,7 @@ exports.gamePage = async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const game = await Game.findOne({sessionId});
+    const game = await Game.findOne({ sessionId });
 
     if (game) {
       res.render("game", { sessionId });
@@ -25,6 +23,7 @@ exports.gamePage = async (req, res) => {
     res.status(500).send("internal server error");
   }
 };
+
 // This handles the Websocket events
 
 exports.handleSocketEvents = (socket, io) => {
@@ -90,30 +89,36 @@ exports.handleSocketEvents = (socket, io) => {
 
       if (!game || game.gameMaster !== socket.id) return; // Only the game master can start this.
 
+      const randomQuestion = await Question.aggregate([
+        { $sample: { size: 1 } },
+      ]);
+      if (randomQuestion.length === 0) {
+        socket.emit("error", { message: "No questions available." });
+        return;
+      }
+
       // Setting up game question
-      game.question = question;
-      game.answer = answer.toLowerCase(); // Keeping it on lower case to make it simple.
+      game.question = randomQuestion[0].question;
+      game.answer = randomQuestion[0].answer.toLowerCase(); // Keeping it on lower case to make it simple.
       game.status = "in_progress";
       await game.save();
 
-      io.to(sessionId).emit("gameStarted", { question }); // This notifies players that the game round has started and send the question
-      console.log(
-        `Game started for session ${sessionId} with question: ${question}`
-      );
+      io.to(sessionId).emit("gameStarted", { question: game.question }); // This notifies players that the game round has started and send the question
+      console.log(`Game started with question: ${game.question}`);
 
       // Setting when game times out.
       setTimeout(async () => {
         try {
-          const game = await Game.findOne({});
-          if (!game) return;
+          const updatedGame = await Game.findOne({ sessionId });
+          if (!updatedGame) return;
 
           io.to(sessionId).emit("gameEnded", {
             message: "Game ended! Start new game.",
-            answer: game.answer,
+            answer: updatedGame.answer,
           });
 
-          game.status = "waiting";
-          await game.save();
+          updatedGame.status = "waiting";
+          await updatedGame.save();
         } catch (error) {
           console.error("Error Ending gmae:", error);
         }
@@ -136,19 +141,18 @@ exports.handleSocketEvents = (socket, io) => {
       if (!player || player.attempts <= 0) return;
 
       const correctAnswer = game.answer;
-      const playerGuess = guess.toLowerCase();
+      // const playerGuess = guess.toLowerCase();
 
-      if (playerGuess === correctAnswer) {
-        player.score +=10;
+      if (guess.toLowerCase() === correctAnswer) {
+        player.score += 10;
         game.status = "waiting";
         await game.save();
 
         io.to(sessionId).emit("gameEnded", {
-            message: `${username} won!`,
-            answer: correctAnswer,
-          });
-
-  } else {
+          message: `${username} won!`,
+          answer: correctAnswer,
+        });
+      } else {
         // When user or player guessed Wrong, Then reduce the number of attempts from the initial default of 5
         player.attempts -= 1;
         await game.save();
@@ -159,20 +163,7 @@ exports.handleSocketEvents = (socket, io) => {
             message: "Limits exceeded for attempts",
           });
         }
-
       }
-// To check all players if attempts are finished
-
-const allOutOfAttempts = game.players.every((p) => p.attempts === 0);
-if (allOutOfAttempts) {
-    game.status = "waiting";
-    await game.save();
-
-    io.to(sessionId).emit("gameEnded", {
-        message: "Round over! guess wrongly by users",
-        answer: correctAnswer,
-    });
-}
       // Updating the users/players list
       io.to(sessionId).emit("updatePlayers", game.players);
     } catch (error) {
@@ -181,7 +172,18 @@ if (allOutOfAttempts) {
     }
   });
 
+  // To check all players if attempts are finished
 
+  // const allOutOfAttempts = game.players.every((p) => p.attempts === 0);
+  // if (allOutOfAttempts) {
+  //     game.status = "waiting";
+  //     await game.save();
+
+  //     io.to(sessionId).emit("gameEnded", {
+  //         message: "Round over! guess wrongly by users",
+  //         answer: correctAnswer,
+  //     });
+  // }
 
   // Implementing when user (Player) is Disconnected from Game
 
