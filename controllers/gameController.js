@@ -1,5 +1,8 @@
 const mongoose = require("mongoose");
 const Game = require("../models/GameSession");
+const Question = require("../models/question")
+
+
 
 // This handles the route for the game page
 
@@ -9,9 +12,7 @@ exports.gamePage = async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const game = await Game.findOne({
-      _id: new mongoose.Types.ObjectId(sessionId),
-    });
+    const game = await Game.findOne({sessionId});
 
     if (game) {
       res.render("game", { sessionId });
@@ -27,6 +28,7 @@ exports.gamePage = async (req, res) => {
 // This handles the Websocket events
 
 exports.handleSocketEvents = (socket, io) => {
+  //Creating Game
   socket.on("createGame", async ({ username }) => {
     const sessionId = `game-${Date.now()}`;
 
@@ -70,6 +72,7 @@ exports.handleSocketEvents = (socket, io) => {
       await game.save();
 
       // Notification to users in the game
+      // i will implement the game session ID when i get off.
 
       socket.join(sessionId);
       io.to(sessionId).emit("updatePlayers", game.players); // Emit all users/player in the session.
@@ -87,25 +90,36 @@ exports.handleSocketEvents = (socket, io) => {
 
       if (!game || game.gameMaster !== socket.id) return; // Only the game master can start this.
 
+      // Setting up game question
       game.question = question;
       game.answer = answer.toLowerCase(); // Keeping it on lower case to make it simple.
       game.status = "in_progress";
       await game.save();
 
-      io.to(sessionId).emit("gameStarted", { question });
+      io.to(sessionId).emit("gameStarted", { question }); // This notifies players that the game round has started and send the question
+      console.log(
+        `Game started for session ${sessionId} with question: ${question}`
+      );
 
       // Setting when game times out.
       setTimeout(async () => {
-        io.to(sessionId).emit("gameEnded", {
-          message: "Game ended! Start new game.",
-          answer: game.answer,
-        });
+        try {
+          const game = await Game.findOne({});
+          if (!game) return;
 
-        game.status = "waiting";
-        await game.save();
-      }, 1200000); // This should be 2mins.
+          io.to(sessionId).emit("gameEnded", {
+            message: "Game ended! Start new game.",
+            answer: game.answer,
+          });
+
+          game.status = "waiting";
+          await game.save();
+        } catch (error) {
+          console.error("Error Ending gmae:", error);
+        }
+      }, 120000); // This should be 2mins.
     } catch (error) {
-      console.error("Error Starting gmae:", error);
+      console.error("Error Starting Game:", error);
       socket.emit("error", { message: "Internal server error" });
     }
   });
@@ -122,18 +136,19 @@ exports.handleSocketEvents = (socket, io) => {
       if (!player || player.attempts <= 0) return;
 
       const correctAnswer = game.answer;
+      const playerGuess = guess.toLowerCase();
 
-      if (guess.toLowerCase() === correctAnswer) {
-        // When user or player guessed correctly
-        player.score += 10;
+      if (playerGuess === correctAnswer) {
+        player.score +=10;
         game.status = "waiting";
         await game.save();
 
         io.to(sessionId).emit("gameEnded", {
-          message: `${username} won!`,
-          answer: correctAnswer,
-        });
-      } else {
+            message: `${username} won!`,
+            answer: correctAnswer,
+          });
+
+  } else {
         // When user or player guessed Wrong, Then reduce the number of attempts from the initial default of 5
         player.attempts -= 1;
         await game.save();
@@ -144,8 +159,20 @@ exports.handleSocketEvents = (socket, io) => {
             message: "Limits exceeded for attempts",
           });
         }
-      }
 
+      }
+// To check all players if attempts are finished
+
+const allOutOfAttempts = game.players.every((p) => p.attempts === 0);
+if (allOutOfAttempts) {
+    game.status = "waiting";
+    await game.save();
+
+    io.to(sessionId).emit("gameEnded", {
+        message: "Round over! guess wrongly by users",
+        answer: correctAnswer,
+    });
+}
       // Updating the users/players list
       io.to(sessionId).emit("updatePlayers", game.players);
     } catch (error) {
@@ -153,6 +180,8 @@ exports.handleSocketEvents = (socket, io) => {
       socket.emit("error", { message: "Internal server error" });
     }
   });
+
+
 
   // Implementing when user (Player) is Disconnected from Game
 
