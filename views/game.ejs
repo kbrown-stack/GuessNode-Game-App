@@ -1,70 +1,109 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Game Room</title>
     <script src="/socket.io/socket.io.js"></script>
-</head>
-<body>
-
+  </head>
+  <body>
     <h1>Game Room</h1>
     <h3>Session ID: <%= sessionId %></h3>
     <h3>Players:</h3>
     <ul id="playersList"></ul>
 
+    <button onclick="startGame ()">Start Game </button>
+    <div id="gameArea" style="display: none;">
+        <h2 id="question"Question: ></h2>
+        <input type="text" id="guessInput" placeholder="Enter your guess">
+        <button onclick="submitGuess()">Submit</button>
+
+
+    </div>
+
     <script>
-        const socket = io();
-        const sessionId = "<%= sessionId %>";
-    
-        window.onload = () => {
+      const socket = io();
+      const sessionId = "<%= sessionId %>";
 
-            // This is to comfirm if player or user is already existing
+      window.onload = () => {
+        // This is to comfirm if player or user is already existing
 
-            let username = sessionStorage.getItem("username");
-    
-            // If no username is seen here, prompt the user to input it.
-            if (!username) {
-                username = prompt("Enter your username:");
-                if (!username) {
-                    alert("Please enter your username");
-                    window.location.href = "/"; // This redirects it back to the home page which is the index page if no username.
-                    return;
-                }
-                sessionStorage.setItem("username", username); // This saves username
-            }
-    
-            // This emits joingame session with username and session ID
-            
-            // setTimeout(() => {
-            //     socket.emit("joinGame", { sessionId, username }); // This signifies time to join , to enable server process the session request
-            // }, 1000);
+        let username = sessionStorage.getItem("username");
 
-            setTimeout(() => {
-    if (gameSessions[sessionId]) {  
-        res.render("game", { sessionId });  
-    } else {
-        res.render("error", { message: "Game session not available. Please check the ID." });
-    }
-}, 1000);  // Wait 1 second before checking
+        // If no username is seen here, prompt the user to input it.
+        if (!username) {
+          username = prompt("Enter your username:");
+          if (!username) {
+            alert("Please enter your username");
+            window.location.href = "/"; // This redirects it back to the home page which is the index page if no username.
+            return;
+          }
+          sessionStorage.setItem("username", username); // This saves username
+        }
 
+        // This emits the game event session
 
-            //To Hanlde the users/players update list.
-    
-            socket.on("updatePlayers", (players) => {
-                const playersList = document.getElementById("playersList");
-                playersList.innerHTML = ""; // This clears the users/players list.
-                players.forEach(player => {
-                    playersList.innerHTML += `<li>${player.username} (Score: ${player.score})</li>`;
-                });
-            });
-    
-            socket.on("error", (data) => {
-                alert(data.message);
-                window.location.href = "/"; // This redirects it back to the home page which is the index page if any error happens.
-            });
-        };
+        setTimeout(() => {
+          socket.emit("joinGame", { sessionId, username });
+        }, 1000); // Wait 1 second before checking
+
+        //To Hanlde the users/players update list.
+
+        socket.on("updatePlayers", (players) => {
+          const playersList = document.getElementById("playersList");
+          playersList.innerHTML = ""; // This clears the users/players list.
+          players.forEach((player) => {
+            playersList.innerHTML += `<li>${player.username} (Score: ${player.score})</li>`;
+          });
+        });
+
+        // This handles start game and displays questions
+
+        socket.on("gameStarted", (data) => {
+          document.getElementById(
+            "question"
+          ).innerText = `Question: ${data.question}`;
+          document.getElementById("gameArea").style.display = "block";
+        });
+
+        // This Handles wrong guess
+
+        socket.on("WrongGuess", (data) => {
+          alert(`Wrong guess, Attempts remaining : ${data.remaining}`);
+        });
+
+        // Handle out of attempts
+
+        socket.on("outOfAttempts", (data) => {
+          alert(data.message);
+        });
+
+        // This handle the End of Game
+        socket.on("gameEnded", (data) => {
+          alert(`${data.message} The answer was: ${data.answer}`);
+          document.getElementById("gameArea").style.display = "none";
+        });
+
+        socket.on("error", (data) => {
+          alert(data.message);
+          window.location.href = "/"; // This redirects it back to the home page which is the index page if is wrong guess.
+        });
+      };
+
+      function startGame() {
+        socket.emit("startGame", { sessionId });
+      }
+
+      function submitGuess() {
+        const guess = document.getElementById("guessinput").value;
+        if (!guess.trim()) return;
+        socket.emit("submitGuess", {
+          sessionId,
+          username: sessionId.getItem("username"),
+          guess,
+        });
+        document.getElementById("guessInput").value = "";
+      }
     </script>
-    
-</body>
+  </body>
 </html>
