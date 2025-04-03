@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Game = require("../models/GameSession");
 const Question = require("../models/question");
+const { response } = require("express");
 
 // This handles the route for the game page
 
@@ -13,13 +14,13 @@ exports.gamePage = async (req, res) => {
     const game = await Game.findOne({ sessionId });
 
     if (game) {
-      res.render("game", { sessionId });
+      res.render("game", { sessionId, gameMaster: game.gameMasterUsername }); // This shows game master is now included.
     } else {
       console.log("Game session not found!"); // loggg
       res.status(404).send("Game session not found");
     }
   } catch (error) {
-    console.error("Error fetching game session:", error);
+    // console.error("Error fetching game session:", error);
     res.status(500).send("internal server error");
   }
 };
@@ -28,34 +29,51 @@ exports.gamePage = async (req, res) => {
 
 exports.handleSocketEvents = (socket, io) => {
   //Creating Game
+
   socket.on("createGame", async ({ username }) => {
-    const sessionId = `game-${Date.now()}`;
+  
+    try {
+      const sessionId = `game-${Date.now()}`;
 
-    const newGame = new Game({
-      sessionId,
-      gameMaster: socket.id,
-      players: [{ id: socket.id, username, score: 0, attempts: 5 }],
-      status: "waiting",
-    });
+      const newGame = new Game({
+        sessionId,
+        gameMaster: socket.id, // this stores the game master ID
+        gameMasterUsername: username, // This stores the username.
+        players: [{ id: socket.id, username, score: 0, attempts: 5 }],
+        status: "waiting",
+      });
 
-    await newGame.save(); // Save the game session in MongoDB
-    console.log("Game created:", sessionId);
-    socket.emit("gameCreated", { sessionId });
+      await newGame.save(); // Save the game session in MongoDB
+      // console.log("Game created and saved to Mongodb:", sessionId);
+
+
+  console.log("Received game session ID:", sessionId)
+      socket.emit("gameCreated", { sessionId }); // This is sending the sessionID back to the client
+    } catch (error) {
+      // console.error("Error creating game:", error);
+      socket.emit("error", { message: "Unable to create game" });
+    }
   });
 
   // To Join Game
 
-  socket.on("JoinGame", async ({ sessionId, username }) => {
+  socket.on("joinGame", async ({ sessionId, username }) => {
+    console.log(`* User ${username} trying to join ${sessionId}`); // this is to check who is joining the session.
+
     try {
       const game = await Game.findOne({ sessionId });
+      console.log("Game session found:", game); // this is to check if the game exists.
 
       if (!game) {
+        console.log("Game session not found!");
         socket.emit("error", {
-          message: "Game session not available, Please kindly check your ID",
+          message: "Cannot join this game session",
         });
         return;
       }
+
       if (game.status !== "waiting") {
+        console.log("Game session already started");
         socket.emit("error", {
           message: "Game session already runnung!",
         });
@@ -63,68 +81,63 @@ exports.handleSocketEvents = (socket, io) => {
       }
 
       if (game.players.some((player) => player.username === username)) {
+        console.log("Username already exist in the this game session");
         socket.emit("error", { message: "Username already exists" });
         return;
       }
 
-      game.players.push({ id: socket.id, username, score: 0, attempts: 5 }); // Adding a user/player to the game session
+      game.players.push({ id: socket.id, username, score: 0, attempts: 5 }); 
       await game.save();
 
+      console.log(`${username} added to the game! ${sessionId}`); // Adding a user/player to the game session
+
+      
+
       // Notification to users in the game
-      // i will implement the game session ID when i get off.
 
       socket.join(sessionId);
       io.to(sessionId).emit("updatePlayers", game.players); // Emit all users/player in the session.
       socket.emit("gameJoined", { sessionId }); // This is to notify client or user that game was joined successfully.
     } catch (error) {
       console.error("Error joining game:", error);
-      socket.emit("error", { message: " Internal server error" });
+      socket.emit("error", { message: " Cannot join game session" });
     }
   });
 
+  // socket.emit("gameJoined", ({sessionId}) => {
+  //   console.log("Joined game:", sessionId);
+  // })
+
   // To Start Game
-  socket.on("startGame", async ({ sessionId, question, answer }) => {
+
+  socket.on("startGame", async ({ sessionId }) => {
     try {
       const game = await Game.findOne({ sessionId });
 
-      if (!game || game.gameMaster !== socket.id) return; // Only the game master can start this.
-
-      const randomQuestion = await Question.aggregate([
-        { $sample: { size: 1 } },
-      ]);
-      if (randomQuestion.length === 0) {
-        socket.emit("error", { message: "No questions available." });
+      if (!game || game.player.length < 2 || game.gameMaster !== socket.id) {
+        socket.emit("error", { message: "Game session cannot start" });
         return;
       }
 
-      // Setting up game question
-      game.question = randomQuestion[0].question;
-      game.answer = randomQuestion[0].answer.toLowerCase(); // Keeping it on lower case to make it simple.
+      game.status = "in_progress";
+      const { question, answer } = await askGameMasterForQuestion(socket);
+      game.question = question;
+      game.answer = answer.toLowerCase();
       game.status = "in_progress";
       await game.save();
-
-      io.to(sessionId).emit("gameStarted", { question: game.question }); // This notifies players that the game round has started and send the question
-      console.log(`Game started with question: ${game.question}`);
+      io.to(sessionId).emit("gameStarted", { question });
 
       // Setting when game times out.
       setTimeout(async () => {
-        try {
-          const updatedGame = await Game.findOne({ sessionId });
-          if (!updatedGame) return;
-
-          io.to(sessionId).emit("gameEnded", {
-            message: "Game ended! Start new game.",
-            answer: updatedGame.answer,
-          });
-
-          updatedGame.status = "waiting";
-          await updatedGame.save();
-        } catch (error) {
-          console.error("Error Ending gmae:", error);
-        }
+        io.to(sessionId).emit("gameEnded", {
+          message: "Game ended! Start new game.",
+          answer,
+        });
+        game.status = "waiting";
+        game.gameMaster = game.players[1]?.id || game.gameMaster;
+        await game.save();
       }, 120000); // This should be 2mins.
     } catch (error) {
-      console.error("Error Starting Game:", error);
       socket.emit("error", { message: "Internal server error" });
     }
   });
@@ -140,34 +153,33 @@ exports.handleSocketEvents = (socket, io) => {
       const player = game.players.find((p) => p.id === socket.id);
       if (!player || player.attempts <= 0) return;
 
-      const correctAnswer = game.answer;
+      // const correctAnswer = game.answer;
       // const playerGuess = guess.toLowerCase();
 
-      if (guess.toLowerCase() === correctAnswer) {
+      if (guess.toLowerCase() === game.answer) {
         player.score += 10;
         game.status = "waiting";
-        await game.save();
+        // await game.save();
 
         io.to(sessionId).emit("gameEnded", {
           message: `${username} won!`,
-          answer: correctAnswer,
+          answer: game.answer,
         });
       } else {
         // When user or player guessed Wrong, Then reduce the number of attempts from the initial default of 5
         player.attempts -= 1;
-        await game.save();
-        socket.emit("wrongGuess", { remainingAttempts: player.attempts });
-
         if (player.attempts === 0) {
           socket.emit("outOfAttempts", {
             message: "Limits exceeded for attempts",
           });
+        } else {
+          socket.emit("wrongGuess", { remainingAttempts: player.attempts });
         }
       }
-      // Updating the users/players list
-      io.to(sessionId).emit("updatePlayers", game.players);
+      await game.save();
+
+      io.to(sessionId).emit("updatePlayers", game.players); // Updating the users/players list
     } catch (error) {
-      console.error("Error processing guess:", error);
       socket.emit("error", { message: "Internal server error" });
     }
   });
@@ -194,10 +206,22 @@ exports.handleSocketEvents = (socket, io) => {
       if (game) {
         // If the user was just a player, remove them from the players list
         game.players = game.players.filter((player) => player.id !== socket.id);
-        await game.save();
+        if (game.players.length === 0) {
+          await Game.deleteOne({ sessionId: game.sessionId });
+        } else {
+          await game.save();
+        }
       }
     } catch (error) {
       console.error("Error Handling disconnect:", error);
     }
   });
 };
+
+async function askGameMasterForQuestion(socket) {
+  return new Promise((resolve) => {
+    socket.emit("creationQuestion", {}, (response) => {
+      resolve(response);
+    });
+  });
+}
