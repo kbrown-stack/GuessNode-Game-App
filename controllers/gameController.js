@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
-const Game = require("../models/GameSession");
+const {GameSession} = require("../models/GameSession");
 const Question = require("../models/question");
 const { response } = require("express");
 
-// This handles the route for the game page
+// This handles the route for the GameSession page
 
 exports.gamePage = async (req, res) => {
   // const sessionId = req.params.sessionId;
@@ -11,16 +11,16 @@ exports.gamePage = async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    const game = await Game.findOne({ sessionId });
+    const session = await GameSession.findOne({ sessionId });
 
-    if (game) {
-      res.render("game", { sessionId, gameMaster: game.gameMasterUsername }); // This shows game master is now included.
+    if (session) {
+      res.render("game", { sessionId, gameMaster: session.GameSessionMasterUsername }); // This shows GameSession master is now included.
     } else {
-      console.log("Game session not found!"); // loggg
+      console.log("Game Session not found!"); // loggg
       res.status(404).send("Game session not found");
     }
   } catch (error) {
-    // console.error("Error fetching game session:", error);
+    // console.error("Error fetching GameSession session:", error);
     res.status(500).send("internal server error");
   }
 };
@@ -28,143 +28,158 @@ exports.gamePage = async (req, res) => {
 // This handles the Websocket events
 
 exports.handleSocketEvents = (socket, io) => {
-  //Creating Game
+  //Creating GameSession
 
-  socket.on("createGame", async ({ username }) => {
+  socket.on("createGameSession", async ({ username }) => {
   
     try {
-      const sessionId = `game-${Date.now()}`;
+      const sessionId = `GameSession-${Date.now()}`;
 
-      const newGame = new Game({
+      const newSession = new GameSession({
         sessionId,
-        gameMaster: socket.id, // this stores the game master ID
-        gameMasterUsername: username, // This stores the username.
+        GameSessionMaster: socket.id, // this stores the GameSession master ID
+        GameSessionMasterUsername: username, // This stores the username.
         players: [{ id: socket.id, username, score: 0, attempts: 5 }],
         status: "waiting",
       });
 
-      await newGame.save(); // Save the game session in MongoDB
-      // console.log("Game created and saved to Mongodb:", sessionId);
+     const savedSession = await newSession.save(); // Save the GameSession session in MongoDB
+      console.log("GameSession created and saved to Mongodb:", savedSession);
 
 
-  console.log("Received game session ID:", sessionId)
-      socket.emit("gameCreated", { sessionId }); // This is sending the sessionID back to the client
+      // To give feeback , added error handling while saving the game session.
+
+      GameSession.save()
+      .then(savedSession => {
+        console.log("GameSession created and saved to Mongodb:", savedSession );
+})
+.catch(err => {
+  console.error("Error saving GameSession:", err);
+});
+
+
+  // console.log("Received GameSession session ID:", sessionId)
+
+      socket.emit("GameSessionCreated", { sessionId }); // This is sending the sessionID back to the client
     } catch (error) {
-      // console.error("Error creating game:", error);
-      socket.emit("error", { message: "Unable to create game" });
+      // console.error("Error creating GameSession:", error);
+      socket.emit("error", { message: "Unable to create GameSession" });
     }
+
+    // const all = await GameSession.find();  // This is to print all gamesession in my log
+    // console.log("All session in DB:", all)
   });
 
-  // To Join Game
 
-  socket.on("joinGame", async ({ sessionId, username }) => {
-    console.log(`* User ${username} trying to join ${sessionId}`); // this is to check who is joining the session.
+  // To Join GameSession
+
+  socket.on("joinGameSession", async ({ sessionId, username }) => {
+    // this is to check who is joining the session.
 
     try {
-      const game = await Game.findOne({ sessionId });
-      console.log("Game session found:", game); // this is to check if the game exists.
+       console.log(`* User ${username} trying to join ${sessionId}`);
+      const session = await GameSession.findOne({ sessionId });
+      // console.log("GameSession session found:", GameSession); // this is to check if the GameSession exists.
 
-      if (!game) {
-        console.log("Game session not found!");
+      if (!session) {
+        console.log("GameSession session not found!");
         socket.emit("error", {
-          message: "Cannot join this game session",
+          message: "Cannot join this GameSession session",
         });
         return;
       }
 
-      if (game.status !== "waiting") {
-        console.log("Game session already started");
+      if (session.status !== "waiting") {
+        // console.log("GameSession session already started");
         socket.emit("error", {
-          message: "Game session already runnung!",
+          message: "GameSession session already runnung!",
         });
         return;
       }
 
-      if (game.players.some((player) => player.username === username)) {
-        console.log("Username already exist in the this game session");
+      if (session.players.some((player) => player.username === username)) {
+        // console.log("Username already exist in the this GameSession session");
         socket.emit("error", { message: "Username already exists" });
         return;
       }
 
-      game.players.push({ id: socket.id, username, score: 0, attempts: 5 }); 
-      await game.save();
+      session.players.push({ id: socket.id, username, score: 0, attempts: 5 }); 
+      await session.save();
 
-      console.log(`${username} added to the game! ${sessionId}`); // Adding a user/player to the game session
+      // console.log(`${username} added to the session! ${sessionId}`); // Adding a user/player to the GameSession session
 
       
 
-      // Notification to users in the game
+      // Notification to users in the GameSession
 
       socket.join(sessionId);
-      io.to(sessionId).emit("updatePlayers", game.players); // Emit all users/player in the session.
-      socket.emit("gameJoined", { sessionId }); // This is to notify client or user that game was joined successfully.
+      io.to(sessionId).emit("updatePlayers", session.players); // Emit all users/player in the session.
+      socket.emit("GameSessionJoined", { sessionId }); // This is to notify client or user that GameSession was joined successfully.
     } catch (error) {
-      console.error("Error joining game:", error);
-      socket.emit("error", { message: " Cannot join game session" });
+      console.error("Error joining GameSession:", error);
+      socket.emit("error", { message: " Cannot join GameSession session" });
     }
   });
 
-  // socket.emit("gameJoined", ({sessionId}) => {
-  //   console.log("Joined game:", sessionId);
-  // })
+  // To Start GameSession
 
-  // To Start Game
-
-  socket.on("startGame", async ({ sessionId }) => {
+  socket.on("startGameSession", async ({ sessionId }) => {
     try {
-      const game = await Game.findOne({ sessionId });
+      const session = await GameSession.findOne({ sessionId });
 
-      if (!game || game.player.length < 2 || game.gameMaster !== socket.id) {
-        socket.emit("error", { message: "Game session cannot start" });
+      if (!session || session.player.length < 2 || session.GameSessionMaster !== socket.id) {
+        socket.emit("error", { message: "GameSession session cannot start" });
         return;
       }
 
-      game.status = "in_progress";
-      const { question, answer } = await askGameMasterForQuestion(socket);
-      game.question = question;
-      game.answer = answer.toLowerCase();
-      game.status = "in_progress";
-      await game.save();
-      io.to(sessionId).emit("gameStarted", { question });
+      session.status = "in_progress";
+      const { question, answer } = await askGameSessionMasterForQuestion(socket);
+      session.question = question;
+      session.answer = answer.toLowerCase();
+      // session.status = "in_progress";
+      await session.save();
+      io.to(sessionId).emit("GameSessionStarted", { question });
 
-      // Setting when game times out.
+      // Setting when GameSession times out.
       setTimeout(async () => {
-        io.to(sessionId).emit("gameEnded", {
-          message: "Game ended! Start new game.",
-          answer,
+        io.to(sessionId).emit("GameSessionEnded", {
+          message: "GameSession ended! Start new GameSession.",
+          answer: session.answer,
         });
-        game.status = "waiting";
-        game.gameMaster = game.players[1]?.id || game.gameMaster;
-        await game.save();
+        session.status = "waiting";
+        session.GameSessionMaster = session.players[1]?.id || session.GameSessionMaster;
+        await session.save();
       }, 120000); // This should be 2mins.
     } catch (error) {
       socket.emit("error", { message: "Internal server error" });
     }
   });
 
-  // To Submit Game Guess
+
+  // To Submit GameSession Guess
 
   socket.on("submitGuess", async ({ sessionId, username, guess }) => {
     try {
-      const game = await Game.findOne({ sessionId });
+      const session = await GameSession.findOne({ sessionId });
 
-      if (!game || game.status !== "in_progress") return;
+      if (!session || session.status !== "in_progress") return;
 
-      const player = game.players.find((p) => p.id === socket.id);
+      const player = session.players.find((p) => p.id === socket.id);
       if (!player || player.attempts <= 0) return;
 
-      // const correctAnswer = game.answer;
+      // const correctAnswer = GameSession.answer;
       // const playerGuess = guess.toLowerCase();
 
-      if (guess.toLowerCase() === game.answer) {
+      if (guess.toLowerCase() === session.answer) {
         player.score += 10;
-        game.status = "waiting";
-        // await game.save();
+        session.status = "waiting";
+        // await GameSession.save();
 
-        io.to(sessionId).emit("gameEnded", {
+        io.to(sessionId).emit("GameSessionEnded", {
           message: `${username} won!`,
-          answer: game.answer,
+          answer: session.answer,
         });
+
       } else {
         // When user or player guessed Wrong, Then reduce the number of attempts from the initial default of 5
         player.attempts -= 1;
@@ -176,40 +191,28 @@ exports.handleSocketEvents = (socket, io) => {
           socket.emit("wrongGuess", { remainingAttempts: player.attempts });
         }
       }
-      await game.save();
+      await session.save();
 
-      io.to(sessionId).emit("updatePlayers", game.players); // Updating the users/players list
+      io.to(sessionId).emit("updatePlayers", session.players); // Updating the users/players list
     } catch (error) {
       socket.emit("error", { message: "Internal server error" });
     }
   });
+  
 
-  // To check all players if attempts are finished
-
-  // const allOutOfAttempts = game.players.every((p) => p.attempts === 0);
-  // if (allOutOfAttempts) {
-  //     game.status = "waiting";
-  //     await game.save();
-
-  //     io.to(sessionId).emit("gameEnded", {
-  //         message: "Round over! guess wrongly by users",
-  //         answer: correctAnswer,
-  //     });
-  // }
-
-  // Implementing when user (Player) is Disconnected from Game
+  // Implementing when user (Player) is Disconnected from GameSession
 
   socket.on("disconnect", async () => {
     try {
-      const game = await Game.findOne({ "players.id": socket.id });
+      const session = await GameSession.findOne({ "players.id": socket.id });
 
-      if (game) {
+      if (session) {
         // If the user was just a player, remove them from the players list
-        game.players = game.players.filter((player) => player.id !== socket.id);
-        if (game.players.length === 0) {
-          await Game.deleteOne({ sessionId: game.sessionId });
+        session.players = session.players.filter((player) => player.id !== socket.id);
+        if (session.players.length === 0) {
+          await GameSession.deleteOne({ sessionId: session.sessionId });
         } else {
-          await game.save();
+          await session.save();
         }
       }
     } catch (error) {
@@ -218,7 +221,7 @@ exports.handleSocketEvents = (socket, io) => {
   });
 };
 
-async function askGameMasterForQuestion(socket) {
+async function askGameSessionMasterForQuestion(socket) {  // No this helps to get questions from the gamesession master
   return new Promise((resolve) => {
     socket.emit("creationQuestion", {}, (response) => {
       resolve(response);

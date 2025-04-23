@@ -7,24 +7,25 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <h1>Welcome to GuessNode Game</h1>
+    <h1>Welcome to GuessNode GameSession</h1>
 
-    <button onclick="createGame()">Create Game</button>
-    <button onclick="joinGame()">Join Game</button>
+    <button onclick="createGameSession()">Create GameSession</button>
+    <button onclick="joinGameSession()">Join GameSession</button>
    
     <script>
         const socket = io();
 
-        // This enable us to listen for session creation event  // Observing the gameCreated event before navigating
+        // This enable us to listen for session creation event  // Observing the GameSessionCreated event before navigating
 
-                    socket.on("gameCreated", ({ sessionId }) => {
-                console.log("Received game session ID:", sessionId)
-                window.location.href = `/game/${sessionId}`;
+                    socket.on("GameSessionCreated", ({ sessionId }) => {
+                console.log("Received GameSession session ID:", sessionId)
+                window.location.href = `/GameSession/${sessionId}`;
+                sessionStorage.setItem("sessionId", sessionId)  // this helps to pull the game correctly during the upload via window
             });
 
-// Create Game Function
+// Create GameSession Function
 
-      function createGame() {
+      function createGameSession() {
             let username = sessionStorage.getItem("username");
 
             if (!username) {
@@ -35,16 +36,16 @@
                 }
                sessionStorage.setItem("username", username);
             }
-                     socket.emit("createGame", { username });       // This creates the username in the server.
+                     socket.emit("createGameSession", { username });       // This creates the username in the server.
 
         }
 
 
-// Join Game Fuction
-        function joinGame() {
-            const sessionId = prompt("Enter the Game ID to join:");
+// Join GameSession Fuction
+        function joinGameSession() {
+            const sessionId = prompt("Enter the GameSession ID to join:");
             if (!sessionId || !sessionId.trim()) {
-                alert("Please enter a valid Game ID");
+                alert("Please enter a valid GameSession ID");
                 return;
             }
 
@@ -58,11 +59,11 @@
                 sessionStorage.setItem("username", username);
             }
 
-            socket.emit("joinGame", {sessionId, username}); // this displays the user that joined the game session
+            socket.emit("joinGameSession", {sessionId, username}); // this displays the user that joined the GameSession session
 
-            socket.once("gameJoined", ({sessionId}) => {  // The use of "once" is to enable it to listen to the next response.
-                console.log("Joined the game successfully:", sessionId);
-                window.location.href = `/game/${sessionId}`;
+            socket.once("GameSessionJoined", ({sessionId}) => {  // The use of "once" is to enable it to listen to the next response.
+                console.log("Joined the GameSession successfully:", sessionId);
+                window.location.href = `/GameSession/${sessionId}`;
                 });
 
                 socket.once("error", (data) => {
@@ -73,7 +74,7 @@
 
     </script>
 
-     <!-- <button onclick="joinGame()">Join Game</button> -->
+     <!-- <button onclick="joinGameSession()">Join GameSession</button> -->
 
 </body>
 </html>

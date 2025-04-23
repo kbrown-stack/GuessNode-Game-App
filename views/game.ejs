@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Game Room</title>
+    <title>GameSession Room</title>
     <script src="/socket.io/socket.io.js"></script>
   </head>
   <body>
-    <h1>Game Room</h1>
+    <h1>GameSession Room</h1>
     <h3>Session ID: <%= sessionId %></h3>
-    <h3>Game Master: <%= gameMaster %></h3>  <!--This displays the game master-->
+    <h3>GameSession Master: <%= gameMaster %></h3>  <!--This displays the GameSession master-->
     <ul id="playersList"></ul>
 
-    <button onclick="startGame()">Start Game </button>
+    <button onclick="startGameSession()">Start GameSession </button>
 
-    <div id="gameArea" style="display: none;">
+    <div id="GameSessionArea" style="display: none;">
         <h2 id="question">Question: </h2>
         <input type="text" id="guessInput" placeholder="Enter your guess">
         <button onclick="submitGuess()">Submit</button>
@@ -47,15 +47,15 @@
           return;
         }
 
-        console.log("Emiting joinGame event with:", {sessionId, username})
+        console.log("Emiting joinGameSession event with:", {sessionId, username})
 
 
 
-        // This emits the game event session
+        // This emits the GameSession event session
 
-        setTimeout(() => {
-          socket.emit("joinGame", { sessionId, username });
-        }, 1000); // Wait 1 second before checking
+        // setTimeout(() => {
+        //   socket.emit("joinGameSession", { sessionId, username });
+        // }, 1000); // Wait 1 second before checking
 
         //To Hanlde the users/players update list.
 
@@ -69,11 +69,11 @@
           });
         });
 
-        // Game Joined
+        // GameSession Joined
 
-        socket.on("gameJoined", ({sessionId}) => {
-          console.log("Joined game successfully:", sessionId);
-          document.getElementById("gameArea").style.display = "block";  // This shows the game area.
+        socket.on("GameSessionJoined", ({sessionId}) => {
+          console.log("Joined GameSession successfully:", sessionId);
+          document.getElementById("GameSessionArea").style.display = "block";  // This shows the GameSession area.
         })
 
 
@@ -84,19 +84,19 @@
         });
       };
 
-        // This handles start game and displays questions
+        // This handles start GameSession and displays questions
 
-        socket.on("gameStarted", (data) => {
+        socket.on("GameSessionStarted", (data) => {
           document.getElementById(
             "question"
           ).innerText = `Question: ${data.question}`;
-          document.getElementById("gameArea").style.display = "block";
+          document.getElementById("GameSessionArea").style.display = "block";
         });
 
         // This Handles wrong guess
 
         socket.on("wrongGuess", ({remainingAttempts}) => {
-          alert(`Wrong guess, Attempts remaining : ${data.remaining}`);
+          alert(`Wrong guess, Attempts remaining : ${remainingAttempts}`);
         });
 
         // Handle out of attempts
@@ -105,15 +105,15 @@
           alert(data.message);
         });
 
-        // This handle the End of Game
-        socket.on("gameEnded", (data) => {
+        // This handle the End of GameSession
+        socket.on("GameSessionEnded", (data) => {
           alert(`${data.message} The answer was: ${data.answer}`);
-          document.getElementById("gameArea").style.display = "none";
+          document.getElementById("GameSessionArea").style.display = "none";
         });
 
 
-      function startGame() {
-        socket.emit("startGame", { sessionId });
+      function startGameSession() {
+        socket.emit("startGameSession", { sessionId });
       }
 
       function submitGuess() {

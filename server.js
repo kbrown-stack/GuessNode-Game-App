@@ -5,7 +5,7 @@ const { Server } = require("socket.io");
 const path = require("path");
 const gameRoutes = require("./routes/gameRoutes");
 const connectToDb = require("./db/mongodb"); // importing the mongo DB
-const gameController = require("./controllers/gameController"); // This helps to import the controllers.
+const GameSessionController = require("./controllers/gameController"); // This helps to import the controllers.
 
 const PORT = 8001;
 const app = express();
@@ -20,7 +20,7 @@ app.use(express.static(path.join(__dirname, "public"))); // this is a MD that he
 
 connectToDb(); // Connecting to MongoDB  Database.
 
-app.use("/game", gameRoutes); // Using the game route for all API related game endpoints
+app.use("/GameSession", gameRoutes); // Using the GameSession route for all API related GameSession endpoints
 
 // Setting up the Routes
 
@@ -32,10 +32,11 @@ app.get("/", (req, res) => {
 
 io.on("connection", (socket) => {
   console.log("A user connected:", socket.id);
-  gameController.handleSocketEvents(socket, io);
+  GameSessionController.handleSocketEvents(socket, io);
 });
 // Start the Server
 
 server.listen(PORT, () =>
   console.log(`Server running on http://localhost:${PORT}`)
 );
+
